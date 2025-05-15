@@ -70,7 +70,36 @@ public class DbService : IDbService
 
             command.Parameters.Clear();
             
+            command.CommandText = "UPDATE [Order] SET FullfilledAt = GETDATE() WHERE IdOrder = @IdOrder";
+            command.Parameters.AddWithValue("@IdOrder", idOrder);
+
+            await command.ExecuteNonQueryAsync();
+            command.Parameters.Clear();
+            
+            command.CommandText = "SELECT Price FROM Product WHERE IdProduct = @IdProduct";
+            command.Parameters.AddWithValue("@IdProduct", request.IdProduct);
+            decimal unitPrice = Convert.ToDecimal(await command.ExecuteScalarAsync());
+            decimal totalPrice = unitPrice * request.Amount;
+            command.Parameters.Clear();
+            command.CommandText = @"
+                INSERT INTO Product_Warehouse
+                (IdWarehouse, IdProduct, IdOrder, Amount, Price, CreatedAt)
+                VALUES
+                (@IdWarehouse, @IdProduct, @IdOrder, @Amount, @Price, GETDATE());
+
+                SELECT SCOPE_IDENTITY();";
+
+            command.Parameters.AddWithValue("@IdWarehouse", request.IdWarehouse);
+            command.Parameters.AddWithValue("@IdProduct", request.IdProduct);
+            command.Parameters.AddWithValue("@IdOrder", idOrder);
+            command.Parameters.AddWithValue("@Amount", request.Amount);
+            command.Parameters.AddWithValue("@Price", totalPrice);
+
+            object result = await command.ExecuteScalarAsync();
+            int newId = Convert.ToInt32(result);
+            
             await transaction.CommitAsync();
+            return newId;
         }
         catch (Exception e)
         {
@@ -78,10 +107,27 @@ public class DbService : IDbService
             throw;
         }
         // END TRANSACTION
+        
     }
 
     public async Task<int> AddProductToWarehouseViaProcedureAsync(WarehouseRequestDto request)
     {
-        throw new NotImplementedException();
+        await using SqlConnection connection = new SqlConnection(_configuration.GetConnectionString("Default"));
+        await connection.OpenAsync();
+
+        await using SqlCommand command = new SqlCommand("AddProductToWarehouse", connection);
+        command.CommandType = CommandType.StoredProcedure;
+
+        command.Parameters.AddWithValue("@IdProduct", request.IdProduct);
+        command.Parameters.AddWithValue("@IdWarehouse", request.IdWarehouse);
+        command.Parameters.AddWithValue("@Amount", request.Amount);
+        command.Parameters.AddWithValue("@CreatedAt", request.CreatedAt);
+
+        var result = await command.ExecuteScalarAsync();
+
+        if (result == null)
+            throw new Exception("Procedure did not return any value");
+
+        return Convert.ToInt32(result);
     }
 }
