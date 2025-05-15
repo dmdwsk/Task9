@@ -5,7 +5,7 @@ using Tutorial9.Model;
 using Tutorial9.Services;
 
 [ApiController]
-[Route("api/[controller]")]
+[Route("api/warehouse")]
 public class WarehouseController: ControllerBase
 {
     private readonly IDbService _service;
