@@ -23,7 +23,6 @@ public class DbService : IDbService
         
         command.Connection = connection;
         await connection.OpenAsync();
-
         DbTransaction transaction = await connection.BeginTransactionAsync();
         command.Transaction = transaction as SqlTransaction;
 
@@ -48,18 +47,28 @@ public class DbService : IDbService
 
             command.Parameters.Clear();
             
-            command.CommandText = "INSERT INTO Animal VALUES (@IdAnimal, @Name);";
-            command.Parameters.AddWithValue("@IdAnimal", 1);
-            command.Parameters.AddWithValue("@Name", "Animal1");
-        
-            await command.ExecuteNonQueryAsync();
-        
+            command.CommandText = @"
+                SELECT TOP 1 IdOrder FROM [Order]
+                WHERE IdProduct = @IdProduct AND Amount = @Amount AND CreatedAt < @CreatedAt";
+
+            command.Parameters.AddWithValue("@IdProduct", request.IdProduct);
+            command.Parameters.AddWithValue("@Amount", request.Amount);
+            command.Parameters.AddWithValue("@CreatedAt", request.CreatedAt);
+
+            var idOrderObj = await command.ExecuteScalarAsync();
+            if (idOrderObj == null)
+                throw new Exception("Matching order not found");
+
+            int idOrder = Convert.ToInt32(idOrderObj);
             command.Parameters.Clear();
-            command.CommandText = "INSERT INTO Animal VALUES (@IdAnimal, @Name);";
-            command.Parameters.AddWithValue("@IdAnimal", 2);
-            command.Parameters.AddWithValue("@Name", "Animal2");
-        
-            await command.ExecuteNonQueryAsync();
+            command.CommandText = "SELECT 1 FROM Product_Warehouse WHERE IdOrder = @IdOrder";
+            command.Parameters.AddWithValue("@IdOrder", idOrder);
+
+            exists = await command.ExecuteScalarAsync();
+            if (exists != null)
+                throw new Exception("Order already fulfilled");
+
+            command.Parameters.Clear();
             
             await transaction.CommitAsync();
         }
@@ -71,20 +80,8 @@ public class DbService : IDbService
         // END TRANSACTION
     }
 
-    public async Task ProcedureAsync()
+    public async Task<int> AddProductToWarehouseViaProcedureAsync(WarehouseRequestDto request)
     {
-        await using SqlConnection connection = new SqlConnection(_configuration.GetConnectionString("Default"));
-        await using SqlCommand command = new SqlCommand();
-        
-        command.Connection = connection;
-        await connection.OpenAsync();
-        
-        command.CommandText = "NazwaProcedury";
-        command.CommandType = CommandType.StoredProcedure;
-        
-        command.Parameters.AddWithValue("@Id", 2);
-        
-        await command.ExecuteNonQueryAsync();
-        
+        throw new NotImplementedException();
     }
 }
